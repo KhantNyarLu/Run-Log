@@ -1036,12 +1036,9 @@ document.getElementById('btnSave').addEventListener('click', async () => {
   if (clientSec) localStorage.setItem(LS_CLIENT_SEC, clientSec);
   if (refresh)   localStorage.setItem(LS_REFRESH,    refresh);
   if (access)    localStorage.setItem(LS_TOKEN,      access);
-  // If access token provided without expiry, set expires_at to now+1s to force a refresh check next time
-  // (but don't override if we already have one stored)
-  if (access && !localStorage.getItem(LS_EXPIRES)) {
-    // Assume it expires in 6 hours as per Strava default
-    localStorage.setItem(LS_EXPIRES, String(Math.floor(Date.now()/1000) + 21600));
-  }
+  // Always mark token as expired so getValidToken() immediately refreshes.
+  // This handles pasted tokens that may already be expired.
+  localStorage.setItem(LS_EXPIRES, '0');
 
   overlay.classList.remove('open');
   document.getElementById('btnDisconnect').style.display = 'block';
