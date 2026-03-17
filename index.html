@@ -517,8 +517,11 @@
   <div class="sheet" id="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title">Connect to Strava</div>
-    <div class="sheet-sub">Paste your Strava API access token below. Get it from the Strava API settings page after creating an app.</div>
-    <input class="sheet-input" id="tokenInput" type="password" placeholder="strava_access_token_here" autocomplete="off" spellcheck="false" />
+    <div class="sheet-sub">Enter your Strava API credentials. The token auto-refreshes every 6 hours using your Client ID and Secret — no manual updates needed.</div>
+    <input class="sheet-input" id="clientIdInput"     type="text"     placeholder="Client ID (e.g. 209977)"          autocomplete="off" spellcheck="false" />
+    <input class="sheet-input" id="clientSecretInput" type="password" placeholder="Client Secret"                     autocomplete="off" spellcheck="false" />
+    <input class="sheet-input" id="refreshInput"      type="password" placeholder="Refresh Token"                     autocomplete="off" spellcheck="false" />
+    <input class="sheet-input" id="tokenInput"        type="password" placeholder="Access Token (current, optional)"  autocomplete="off" spellcheck="false" />
     <div class="sheet-actions">
       <button class="btn-save" id="btnSave">Load My Data</button>
       <button class="btn-cancel" id="btnCancel">Cancel</button>
@@ -897,11 +900,65 @@ function render(data, isLive) {
   }).join('');
 }
 
+// ── TOKEN STORAGE KEYS ────────────────────────────────────────────────────
+const LS_TOKEN      = 'strava_token';
+const LS_REFRESH    = 'strava_refresh_token';
+const LS_EXPIRES    = 'strava_expires_at';   // unix seconds
+const LS_CLIENT_ID  = 'strava_client_id';
+const LS_CLIENT_SEC = 'strava_client_secret';
+
+// ── GET VALID TOKEN (auto-refresh if expired) ─────────────────────────────
+async function getValidToken() {
+  const clientId     = localStorage.getItem(LS_CLIENT_ID);
+  const clientSecret = localStorage.getItem(LS_CLIENT_SEC);
+  const refreshToken = localStorage.getItem(LS_REFRESH);
+  const expiresAt    = parseInt(localStorage.getItem(LS_EXPIRES) || '0', 10);
+  const accessToken  = localStorage.getItem(LS_TOKEN);
+
+  // If no credentials at all, throw so caller falls back to demo
+  if (!accessToken && !refreshToken) throw new Error('no_token');
+
+  // If token still valid (>5 min buffer), use it
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (accessToken && expiresAt && (expiresAt - nowSec) > 300) {
+    return accessToken;
+  }
+
+  // Need to refresh — requires client_id, client_secret, refresh_token
+  if (!clientId || !clientSecret || !refreshToken) {
+    // No refresh credentials: just try the stored access token and hope for the best
+    if (accessToken) return accessToken;
+    throw new Error('token_expired_no_refresh_creds');
+  }
+
+  console.log('Access token expired or expiring soon — refreshing…');
+  const body = new URLSearchParams({
+    client_id:     clientId,
+    client_secret: clientSecret,
+    grant_type:    'refresh_token',
+    refresh_token: refreshToken,
+  });
+
+  const res = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST',
+    body,
+  });
+  if (!res.ok) throw new Error('refresh_failed: HTTP ' + res.status);
+
+  const json = await res.json();
+  // Strava returns: access_token, refresh_token, expires_at
+  localStorage.setItem(LS_TOKEN,   json.access_token);
+  localStorage.setItem(LS_REFRESH, json.refresh_token);
+  localStorage.setItem(LS_EXPIRES, String(json.expires_at));
+  return json.access_token;
+}
+
 // ── FETCH STRAVA ──────────────────────────────────────────────────────────
-async function fetchStrava(token) {
+async function fetchStrava() {
   const bar = document.getElementById('loadingBar');
   bar.style.width = '30%';
   try {
+    const token = await getValidToken();
     const res = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=50', {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -919,11 +976,11 @@ async function fetchStrava(token) {
 
 // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
 async function bootstrap() {
-  const token = localStorage.getItem('strava_token');
-  if (token) {
+  const hasCredentials = localStorage.getItem(LS_TOKEN) || localStorage.getItem(LS_REFRESH);
+  if (hasCredentials) {
     document.getElementById('btnDisconnect').style.display = 'block';
     try {
-      const raw = await fetchStrava(token);
+      const raw = await fetchStrava();
       render(processActivities(raw), true);
       return;
     } catch(e) {
@@ -934,15 +991,25 @@ async function bootstrap() {
 }
 
 // ── UI EVENTS ─────────────────────────────────────────────────────────────
-const overlay  = document.getElementById('overlay');
-const tokenInput = document.getElementById('tokenInput');
+const overlay         = document.getElementById('overlay');
+const tokenInput      = document.getElementById('tokenInput');
+const clientIdInput   = document.getElementById('clientIdInput');
+const clientSecInput  = document.getElementById('clientSecretInput');
+const refreshInput    = document.getElementById('refreshInput');
+
+function populateSheet() {
+  clientIdInput.value  = localStorage.getItem(LS_CLIENT_ID)  || '';
+  clientSecInput.value = localStorage.getItem(LS_CLIENT_SEC) || '';
+  refreshInput.value   = localStorage.getItem(LS_REFRESH)    || '';
+  tokenInput.value     = localStorage.getItem(LS_TOKEN)      || '';
+}
 
 document.getElementById('btnConnect').addEventListener('click', () => {
-  const saved = localStorage.getItem('strava_token');
-  if (saved) tokenInput.value = saved;
-  document.getElementById('btnDisconnect').style.display = saved ? 'block' : 'none';
+  populateSheet();
+  const hasAny = localStorage.getItem(LS_TOKEN) || localStorage.getItem(LS_REFRESH);
+  document.getElementById('btnDisconnect').style.display = hasAny ? 'block' : 'none';
   overlay.classList.add('open');
-  setTimeout(() => tokenInput.focus(), 300);
+  setTimeout(() => clientIdInput.focus(), 300);
 });
 
 document.getElementById('btnCancel').addEventListener('click', () => {
@@ -954,23 +1021,42 @@ overlay.addEventListener('click', e => {
 });
 
 document.getElementById('btnSave').addEventListener('click', async () => {
-  const token = tokenInput.value.trim();
-  if (!token) return;
-  localStorage.setItem('strava_token', token);
+  const clientId  = clientIdInput.value.trim();
+  const clientSec = clientSecInput.value.trim();
+  const refresh   = refreshInput.value.trim();
+  const access    = tokenInput.value.trim();
+
+  // Need at least an access token or a refresh token to proceed
+  if (!access && !refresh) {
+    alert('Please enter at least an Access Token or a Refresh Token.');
+    return;
+  }
+
+  if (clientId)  localStorage.setItem(LS_CLIENT_ID,  clientId);
+  if (clientSec) localStorage.setItem(LS_CLIENT_SEC, clientSec);
+  if (refresh)   localStorage.setItem(LS_REFRESH,    refresh);
+  if (access)    localStorage.setItem(LS_TOKEN,      access);
+  // If access token provided without expiry, set expires_at to now+1s to force a refresh check next time
+  // (but don't override if we already have one stored)
+  if (access && !localStorage.getItem(LS_EXPIRES)) {
+    // Assume it expires in 6 hours as per Strava default
+    localStorage.setItem(LS_EXPIRES, String(Math.floor(Date.now()/1000) + 21600));
+  }
+
   overlay.classList.remove('open');
   document.getElementById('btnDisconnect').style.display = 'block';
   try {
-    const raw = await fetchStrava(token);
+    const raw = await fetchStrava();
     render(processActivities(raw), true);
   } catch(e) {
-    alert('Could not fetch Strava data. Check your token and try again.\n\n' + e.message);
+    alert('Could not fetch Strava data. Check your credentials and try again.\n\n' + e.message);
     render(processActivities(getDemoData()), false);
   }
 });
 
 document.getElementById('btnDisconnect').addEventListener('click', () => {
-  localStorage.removeItem('strava_token');
-  tokenInput.value = '';
+  [LS_TOKEN, LS_REFRESH, LS_EXPIRES, LS_CLIENT_ID, LS_CLIENT_SEC].forEach(k => localStorage.removeItem(k));
+  populateSheet();
   overlay.classList.remove('open');
   document.getElementById('liveDot').classList.remove('visible');
   render(processActivities(getDemoData()), false);
