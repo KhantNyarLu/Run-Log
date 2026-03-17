@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RunLog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0A0A0A;
+    --surface:  #111111;
+    --yellow:   #E8FF47;
+    --orange:   #FF6B35;
+    --text:     #F0ECE4;
+    --muted:    #555555;
+    --border:   #1E1E1E;
+  }
+
+  html { font-size: 16px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 0 0 40px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(28px, 6vw, 42px);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .logo span.run { color: var(--orange); }
+  .logo span.slash { color: var(--muted); margin: 0 4px; }
+  .logo span.log { color: var(--yellow); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .live-dot {
+    display: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22C55E;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+    animation: pulse-dot 1.8s ease-out infinite;
+  }
+  .live-dot.visible { display: block; }
+
+  @keyframes pulse-dot {
+    0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+    100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  }
+
+  .btn-connect {
+    background: var(--orange);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .btn-connect:hover { opacity: 0.85; }
+
+  /* ── MAIN ── */
+  main {
+    padding: 16px;
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── STAT CARDS ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(32px, 8vw, 48px);
+    color: var(--yellow);
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── CHART CARDS ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .chart-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.3px;
+  }
+
+  .chart-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--yellow);
+    letter-spacing: 0.5px;
+  }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  /* ── RECENT RUNS TABLE ── */
+  .runs-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .runs-table thead th {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 400;
+    padding: 0 0 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .runs-table thead th:not(:first-child) { text-align: right; }
+
+  .runs-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .runs-table tbody tr:last-child { border-bottom: none; }
+  .runs-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .runs-table tbody td {
+    padding: 11px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+
+  .run-date {
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .run-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    padding-top: 2px;
+  }
+
+  .runs-table td:not(:first-child) { text-align: right; }
+
+  .pr-badge {
+    display: inline-block;
+    background: var(--orange);
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* ── DOUGHNUT LEGEND ── */
+  .doughnut-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── OVERLAY / MODAL / SHEET ── */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 200;
+    backdrop-filter: blur(3px);
+  }
+  .overlay.open { display: flex; align-items: flex-end; justify-content: center; }
+
+  .sheet {
+    background: #161616;
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    padding: 20px 20px 32px;
+    width: 100%;
+    max-width: 520px;
+    animation: slide-up 0.28s cubic-bezier(0.32,0.72,0,1);
+  }
+
+  @keyframes slide-up {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+
+  .sheet-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  .sheet-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .sheet-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    margin-bottom: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .sheet-input::placeholder { color: var(--muted); }
+  .sheet-input:focus { border-color: var(--yellow); }
+
+  .sheet-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn-save {
+    flex: 1;
+    background: var(--orange);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-save:hover { opacity: 0.85; }
+
+  .btn-cancel {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 13px 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .btn-cancel:hover { color: var(--text); }
+
+  .sheet-disconnect {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .sheet-disconnect:hover { color: var(--text); }
+
+  /* ── LOADING STATE ── */
+  .loading-bar {
+    height: 2px;
+    background: linear-gradient(90deg, var(--orange), var(--yellow));
+    width: 0%;
+    transition: width 0.4s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999;
+    border-radius: 1px;
+  }
+
+  /* ── DESKTOP ── */
+  @media (min-width: 768px) {
+    main { padding: 20px 24px; gap: 20px; }
+    header { padding: 20px 24px; }
+
+    .stat-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+    }
+
+    .bottom-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .overlay { align-items: center; }
+    .sheet {
+      border-radius: 12px;
+      max-width: 460px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    main { padding: 24px 32px; }
+    header { padding: 22px 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadingBar"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span class="run">RUN</span><span class="slash"> / </span><span class="log">LOG</span>
+  </div>
+  <div class="header-right">
+    <div class="live-dot" id="liveDot" title="Live Strava data"></div>
+    <button class="btn-connect" id="btnConnect">Connect Strava</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <!-- STAT CARDS -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Distance</div>
+      <div class="stat-value" id="statDist">0</div>
+      <div class="stat-unit">kilometres this year</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Runs</div>
+      <div class="stat-value" id="statRuns">0</div>
+      <div class="stat-unit">activities tracked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Best Pace</div>
+      <div class="stat-value" id="statPace" style="font-size: clamp(26px,6vw,40px)">0:00</div>
+      <div class="stat-unit">min / km</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Longest Run</div>
+      <div class="stat-value" id="statLong">0</div>
+      <div class="stat-unit">kilometres</div>
+    </div>
+  </div>
+
+  <!-- WEEKLY + DOUGHNUT -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Weekly Mileage</span>
+        <span class="chart-badge">km / week</span>
+      </div>
+      <div class="chart-wrap" style="height: 220px;">
+        <canvas id="weeklyChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Run Type Split</span>
+        <span class="chart-badge">%</span>
+      </div>
+      <div class="chart-wrap" style="height: 180px;">
+        <canvas id="typeChart"></canvas>
+      </div>
+      <div class="doughnut-legend" id="typeLegend"></div>
+    </div>
+  </div>
+
+  <!-- RECENT RUNS + PACE -->
+  <div class="bottom-row">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Recent Runs</span>
+      </div>
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Dist</th>
+            <th>Time</th>
+            <th>Pace</th>
+          </tr>
+        </thead>
+        <tbody id="runsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Pace Per Run</span>
+        <span class="chart-badge">Last 6</span>
+      </div>
+      <div class="chart-wrap" style="height: 260px;">
+        <canvas id="paceChart"></canvas>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- CONNECT OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Connect to Strava</div>
+    <div class="sheet-sub">Paste your Strava API access token below. Get it from the Strava API settings page after creating an app.</div>
+    <input class="sheet-input" id="tokenInput" type="password" placeholder="strava_access_token_here" autocomplete="off" spellcheck="false" />
+    <div class="sheet-actions">
+      <button class="btn-save" id="btnSave">Load My Data</button>
+      <button class="btn-cancel" id="btnCancel">Cancel</button>
+    </div>
+    <div class="sheet-disconnect" id="btnDisconnect" style="display:none">Disconnect &amp; use demo data</div>
+  </div>
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────────────────────────
+const YELLOW  = '#E8FF47';
+const ORANGE  = '#FF6B35';
+const TEXT    = '#F0ECE4';
+const MUTED   = '#555555';
+const SURFACE = '#111111';
+const BORDER  = '#1E1E1E';
+
+const TYPE_COLORS = {
+  Easy:     YELLOW,
+  Tempo:    ORANGE,
+  Long:     '#6B7C5A',
+  Interval: '#8B5E3C',
+};
+
+// ── DEMO DATA ─────────────────────────────────────────────────────────────
+function getDemoData() {
+  const now = new Date();
+  const runs = [];
+  const names = ['Morning Run','Tempo Run','Long Run','Easy Run','Interval Session','Evening Run'];
+  const seed = [
+    { km: 5.1,  sec: 1560, name: 'Morning Run' },
+    { km: 6.1,  sec: 1710, name: 'Tempo Run' },
+    { km: 12.4, sec: 4340, name: 'Long Run' },
+    { km: 5.0,  sec: 1800, name: 'Morning Run' },
+    { km: 5.8,  sec: 1538, name: 'Interval Session' },
+    { km: 8.2,  sec: 2706, name: 'Evening Run' },
+    { km: 5.0,  sec: 1620, name: 'Easy Run' },
+    { km: 6.5,  sec: 1820, name: 'Tempo Run' },
+    { km: 14.1, sec: 5076, name: 'Long Run' },
+    { km: 5.0,  sec: 1560, name: 'Morning Run' },
+    { km: 10.0, sec: 3120, name: 'Race Prep 10K' },
+    { km: 7.3,  sec: 2263, name: 'Evening Run' },
+  ];
+  seed.forEach((r, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (seed.length - i) * 3 - Math.floor(Math.random()*2));
+    runs.push({
+      name: r.name,
+      distance: r.km * 1000,
+      moving_time: r.sec,
+      start_date_local: d.toISOString(),
+      type: 'Run',
+    });
+  });
+  return runs;
+}
+
+// ── UTILITIES ─────────────────────────────────────────────────────────────
+function metersToKm(m)    { return m / 1000; }
+function paceSecPerKm(m, s) { return s / (m / 1000); }  // sec/km
+function formatPace(secPerKm) {
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${String(s).padStart(2,'0')}s`;
+}
+function formatDate(iso) {
+  return iso.slice(0,10);
+}
+
+function categorizeRun(km, secPerKm) {
+  if (km >= 15)               return 'Long';
+  if (secPerKm < 270)         return 'Interval';  // < 4:30/km
+  if (secPerKm < 330)         return 'Tempo';     // < 5:30/km
+  return 'Easy';
+}
+
+function getWeekKey(iso) {
+  const d = new Date(iso);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  const mo = d.toLocaleString('default', { month: 'short' });
+  return `${mo} W${week}`;
+}
+
+// ── PROCESS ACTIVITIES ────────────────────────────────────────────────────
+function processActivities(activities) {
+  const runs = activities.filter(a => a.type === 'Run' && a.distance > 100);
+
+  // Stat cards
+  const totalKm   = runs.reduce((s,r) => s + metersToKm(r.distance), 0);
+  const totalRuns = runs.length;
+  const paces     = runs.map(r => paceSecPerKm(r.distance, r.moving_time));
+  const bestPace  = paces.length ? Math.min(...paces) : 0;
+  const longestKm = runs.length ? Math.max(...runs.map(r => metersToKm(r.distance))) : 0;
+
+  // Weekly mileage — last 10 weeks
+  const weekMap = {};
+  runs.forEach(r => {
+    const k = getWeekKey(r.start_date_local);
+    weekMap[k] = (weekMap[k] || 0) + metersToKm(r.distance);
+  });
+  const allWeeks = Object.keys(weekMap);
+  const last10   = allWeeks.slice(-10);
+  const weekLabels = last10;
+  const weekData   = last10.map(w => +weekMap[w].toFixed(2));
+
+  // Run type split
+  const typeCounts = { Easy: 0, Tempo: 0, Long: 0, Interval: 0 };
+  runs.forEach(r => {
+    const pace = paceSecPerKm(r.distance, r.moving_time);
+    const cat  = categorizeRun(metersToKm(r.distance), pace);
+    typeCounts[cat]++;
+  });
+
+  // Recent 6 runs
+  const recent6 = [...runs].sort((a,b) => new Date(b.start_date_local) - new Date(a.start_date_local)).slice(0,6);
+
+  return { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recent6, paces, runs };
+}
+
+// ── COUNT-UP ANIMATION ────────────────────────────────────────────────────
+function countUp(el, target, decimals, suffix, duration) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const val  = ease * target;
+    el.textContent = decimals ? val.toFixed(decimals) : Math.round(val);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = decimals ? target.toFixed(decimals) : target;
+  }
+  requestAnimationFrame(step);
+}
+
+// ── CHART INSTANCES ───────────────────────────────────────────────────────
+let weeklyChart, typeChart, paceChart;
+
+function destroyCharts() {
+  [weeklyChart, typeChart, paceChart].forEach(c => { if(c) c.destroy(); });
+}
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 900, easing: 'easeOutQuart' },
+  plugins: { legend: { display: false }, tooltip: { enabled: true } },
+};
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function render(data, isLive) {
+  const { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recent6 } = data;
+
+  // Stat cards
+  countUp(document.getElementById('statDist'), totalKm, 1, '', 1200);
+  countUp(document.getElementById('statRuns'), totalRuns, 0, '', 900);
+  countUp(document.getElementById('statLong'), longestKm, 1, '', 1100);
+  // Pace — animate separately
+  const paceEl = document.getElementById('statPace');
+  const paceFmt = formatPace(bestPace);
+  const [pm, ps] = paceFmt.split(':');
+  let startT = null;
+  const pDur = 1000;
+  function animPace(ts) {
+    if (!startT) startT = ts;
+    const prog = Math.min((ts - startT) / pDur, 1);
+    const ease = 1 - Math.pow(1 - prog, 3);
+    const curSec = ease * bestPace;
+    paceEl.textContent = formatPace(curSec);
+    if (prog < 1) requestAnimationFrame(animPace);
+    else paceEl.textContent = paceFmt;
+  }
+  requestAnimationFrame(animPace);
+
+  // Live dot
+  const dot = document.getElementById('liveDot');
+  isLive ? dot.classList.add('visible') : dot.classList.remove('visible');
+
+  // Destroy old charts
+  destroyCharts();
+
+  // ── Weekly bar chart ──────────────────────────────────────────────
+  const barColors = weekData.map((_, i) =>
+    i === weekData.length - 1
+      ? YELLOW
+      : `rgba(232,255,71,0.15)`
+  );
+
+  weeklyChart = new Chart(document.getElementById('weeklyChart'), {
+    type: 'bar',
+    data: {
+      labels: weekLabels,
+      datasets: [{
+        data: weekData,
+        backgroundColor: barColors,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      animation: { duration: 1000, easing: 'easeOutQuart' },
+      scales: {
+        x: {
+          ticks: {
+            color: MUTED,
+            font: { family: 'DM Mono', size: 10 },
+            maxRotation: 45,
+            minRotation: 0,
+          },
+          grid: { color: BORDER },
+          border: { color: BORDER },
+        },
+        y: {
+          ticks: {
+            color: MUTED,
+            font: { family: 'DM Mono', size: 10 },
+            callback: v => v + ' km',
+          },
+          grid: { color: BORDER },
+          border: { color: 'transparent' },
+          beginAtZero: true,
+        }
+      },
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y.toFixed(1)} km`,
+          },
+          backgroundColor: '#1A1A1A',
+          titleColor: TEXT,
+          bodyColor: YELLOW,
+          borderColor: BORDER,
+          borderWidth: 1,
+        }
+      }
+    }
+  });
+
+  // ── Doughnut ──────────────────────────────────────────────────────
+  const typeKeys   = Object.keys(typeCounts);
+  const typeValues = typeKeys.map(k => typeCounts[k]);
+  const typeColArr = typeKeys.map(k => TYPE_COLORS[k]);
+
+  typeChart = new Chart(document.getElementById('typeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: typeKeys,
+      datasets: [{
+        data: typeValues,
+        backgroundColor: typeColArr,
+        borderWidth: 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      cutout: '70%',
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+              const pct   = total ? Math.round(ctx.parsed / total * 100) : 0;
+              return ` ${ctx.label}: ${pct}%`;
+            }
+          },
+          backgroundColor: '#1A1A1A',
+          titleColor: TEXT,
+          bodyColor: TEXT,
+          borderColor: BORDER,
+          borderWidth: 1,
+        }
+      }
+    }
+  });
+
+  // Legend
+  const legendEl = document.getElementById('typeLegend');
+  legendEl.innerHTML = typeKeys.map(k => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${TYPE_COLORS[k]}"></div>
+      <span>${k}</span>
+    </div>
+  `).join('');
+
+  // ── Pace horizontal bar chart ─────────────────────────────────────
+  const pace6 = recent6.map(r => ({
+    label: formatDate(r.start_date_local),
+    paceRaw: paceSecPerKm(r.distance, r.moving_time),
+    paceFmt: formatPace(paceSecPerKm(r.distance, r.moving_time)),
+  }));
+
+  // Invert: faster pace = longer bar. Use max - val so bar is longer for lower sec/km
+  const paceRaws  = pace6.map(p => p.paceRaw);
+  const maxPace   = Math.max(...paceRaws) + 30;
+  const barWidths = pace6.map(p => maxPace - p.paceRaw);
+
+  paceChart = new Chart(document.getElementById('paceChart'), {
+    type: 'bar',
+    data: {
+      labels: pace6.map(p => p.label),
+      datasets: [{
+        data: barWidths,
+        backgroundColor: pace6.map((p, i) => i === 0 ? YELLOW : `rgba(232,255,71,0.25)`),
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      indexAxis: 'y',
+      animation: { duration: 1000, easing: 'easeOutQuart' },
+      scales: {
+        x: {
+          display: false,
+          beginAtZero: true,
+        },
+        y: {
+          ticks: {
+            color: MUTED,
+            font: { family: 'DM Mono', size: 10 },
+          },
+          grid: { display: false },
+          border: { color: BORDER },
+        }
+      },
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const item = pace6[ctx.dataIndex];
+              return ` ${item.paceFmt} /km`;
+            }
+          },
+          backgroundColor: '#1A1A1A',
+          titleColor: MUTED,
+          bodyColor: YELLOW,
+          borderColor: BORDER,
+          borderWidth: 1,
+        }
+      }
+    }
+  });
+
+  // Add pace labels as custom plugin overlay
+  // We'll render them as right-aligned text via a simple afterDraw plugin
+  const paceLabels = pace6.map(p => p.paceFmt + '/km');
+  paceChart.paceLabels = paceLabels;
+
+  // ── Recent runs table ─────────────────────────────────────────────
+  const bestPaceVal = Math.min(...recent6.map(r => paceSecPerKm(r.distance, r.moving_time)));
+  const tbody = document.getElementById('runsBody');
+  tbody.innerHTML = recent6.map((r, i) => {
+    const km   = metersToKm(r.distance);
+    const pace = paceSecPerKm(r.distance, r.moving_time);
+    const isPR = pace === bestPaceVal;
+    return `
+      <tr>
+        <td>
+          <div class="run-date">${formatDate(r.start_date_local)}</div>
+          <div class="run-name">${r.name}${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
+        </td>
+        <td><span style="color:${TEXT};font-family:'DM Mono',monospace">${km.toFixed(2)} km</span></td>
+        <td><span style="color:${MUTED}">${formatTime(r.moving_time)}</span></td>
+        <td><span style="color:${YELLOW}">${formatPace(pace)}/km</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── FETCH STRAVA ──────────────────────────────────────────────────────────
+async function fetchStrava(token) {
+  const bar = document.getElementById('loadingBar');
+  bar.style.width = '30%';
+  try {
+    const res = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=50', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    bar.style.width = '80%';
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    bar.style.width = '100%';
+    setTimeout(() => { bar.style.width = '0%'; }, 600);
+    return data;
+  } catch(e) {
+    bar.style.width = '0%';
+    throw e;
+  }
+}
+
+// ── BOOTSTRAP ─────────────────────────────────────────────────────────────
+async function bootstrap() {
+  const token = localStorage.getItem('strava_token');
+  if (token) {
+    document.getElementById('btnDisconnect').style.display = 'block';
+    try {
+      const raw = await fetchStrava(token);
+      render(processActivities(raw), true);
+      return;
+    } catch(e) {
+      console.warn('Strava fetch failed, using demo data:', e.message);
+    }
+  }
+  render(processActivities(getDemoData()), false);
+}
+
+// ── UI EVENTS ─────────────────────────────────────────────────────────────
+const overlay  = document.getElementById('overlay');
+const tokenInput = document.getElementById('tokenInput');
+
+document.getElementById('btnConnect').addEventListener('click', () => {
+  const saved = localStorage.getItem('strava_token');
+  if (saved) tokenInput.value = saved;
+  document.getElementById('btnDisconnect').style.display = saved ? 'block' : 'none';
+  overlay.classList.add('open');
+  setTimeout(() => tokenInput.focus(), 300);
+});
+
+document.getElementById('btnCancel').addEventListener('click', () => {
+  overlay.classList.remove('open');
+});
+
+overlay.addEventListener('click', e => {
+  if (e.target === overlay) overlay.classList.remove('open');
+});
+
+document.getElementById('btnSave').addEventListener('click', async () => {
+  const token = tokenInput.value.trim();
+  if (!token) return;
+  localStorage.setItem('strava_token', token);
+  overlay.classList.remove('open');
+  document.getElementById('btnDisconnect').style.display = 'block';
+  try {
+    const raw = await fetchStrava(token);
+    render(processActivities(raw), true);
+  } catch(e) {
+    alert('Could not fetch Strava data. Check your token and try again.\n\n' + e.message);
+    render(processActivities(getDemoData()), false);
+  }
+});
+
+document.getElementById('btnDisconnect').addEventListener('click', () => {
+  localStorage.removeItem('strava_token');
+  tokenInput.value = '';
+  overlay.classList.remove('open');
+  document.getElementById('liveDot').classList.remove('visible');
+  render(processActivities(getDemoData()), false);
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+bootstrap();
+</script>
+</body>
+</html>
