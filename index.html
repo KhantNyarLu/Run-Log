@@ -605,10 +605,9 @@ function categorizeRun(km, secPerKm) {
 
 function getWeekKey(iso) {
   const d = new Date(iso);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  const weekOfMonth = Math.ceil(d.getDate() / 7);
   const mo = d.toLocaleString('default', { month: 'short' });
-  return `${mo} W${week}`;
+  return `${mo} W${weekOfMonth}`;
 }
 
 // ── PROCESS ACTIVITIES ────────────────────────────────────────────────────
@@ -841,6 +840,7 @@ function render(data, isLive) {
       ...CHART_DEFAULTS,
       indexAxis: 'y',
       animation: { duration: 1000, easing: 'easeOutQuart' },
+      layout: { padding: { right: 64 } },
       scales: {
         x: {
           display: false,
@@ -871,13 +871,24 @@ function render(data, isLive) {
           borderWidth: 1,
         }
       }
-    }
+    },
+    plugins: [{
+      id: 'paceLabelsDraw',
+      afterDraw(chart) {
+        const ctx = chart.ctx;
+        const meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.font = '10px "DM Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        meta.data.forEach((bar, i) => {
+          ctx.fillStyle = i === 0 ? YELLOW : MUTED;
+          ctx.fillText(pace6[i].paceFmt + '/km', bar.x + 6, bar.y);
+        });
+        ctx.restore();
+      }
+    }]
   });
-
-  // Add pace labels as custom plugin overlay
-  // We'll render them as right-aligned text via a simple afterDraw plugin
-  const paceLabels = pace6.map(p => p.paceFmt + '/km');
-  paceChart.paceLabels = paceLabels;
 
   // ── Recent runs table ─────────────────────────────────────────────
   const bestPaceVal = Math.min(...recent6.map(r => paceSecPerKm(r.distance, r.moving_time)));
