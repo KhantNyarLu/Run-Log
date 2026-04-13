@@ -499,7 +499,7 @@
         <span class="chart-title">Recent Runs</span>
       </div>
       <div class="chart-annotation">Your latest activities pulled directly from Strava. PR marks your fastest pace of the year.</div>
-      <div style="max-height:360px;overflow-y:auto;">
+      <div style="height:310px;overflow-y:auto;">
         <table class="runs-table">
           <thead>
             <tr>
@@ -520,8 +520,10 @@
         <span class="chart-badge">This Year</span>
       </div>
       <div class="chart-annotation">A shorter bar means a faster pace. Look for improvement across all your runs this year.</div>
-      <div class="chart-wrap" style="max-height:260px;overflow-y:auto;">
-        <canvas id="paceChart"></canvas>
+      <div style="height:260px;overflow-y:auto;">
+        <div class="chart-wrap" id="paceWrap">
+          <canvas id="paceChart"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -869,9 +871,9 @@ function render(data, isLive) {
   const maxPace   = Math.max(...paceRaws) + 30;
   const barWidths = paceAll.map(p => maxPace - p.paceRaw);
 
-  // Size canvas to fit all runs so the scrollable container can clip it
+  // Size the inner chart-wrap to fit all runs; the outer div scrolls at 260px
   const paceCanvas = document.getElementById('paceChart');
-  paceCanvas.style.height = Math.max(260, recentRuns.length * 28) + 'px';
+  document.getElementById('paceWrap').style.height = Math.max(260, recentRuns.length * 28) + 'px';
 
   paceChart = new Chart(paceCanvas, {
     type: 'bar',
