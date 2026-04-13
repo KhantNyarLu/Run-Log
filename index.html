@@ -154,7 +154,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 6px;
+  }
+
+  .chart-annotation {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    opacity: 0.75;
+    margin-bottom: 14px;
+    line-height: 1.5;
   }
 
   .chart-title {
@@ -227,7 +236,7 @@
   .pr-badge {
     display: inline-block;
     background: var(--orange);
-    color: #fff;
+    color: #111111;
     font-family: 'DM Mono', monospace;
     font-size: 9px;
     font-weight: 500;
@@ -464,6 +473,7 @@
         <span class="chart-title">Weekly Mileage</span>
         <span class="chart-badge">km / week</span>
       </div>
+      <div class="chart-annotation">Track whether your total running volume is increasing week over week.</div>
       <div class="chart-wrap" style="height: 220px;">
         <canvas id="weeklyChart"></canvas>
       </div>
@@ -474,6 +484,7 @@
         <span class="chart-title">Run Type Split</span>
         <span class="chart-badge">%</span>
       </div>
+      <div class="chart-annotation">A healthy training mix includes easy, tempo, long, and interval runs in the right balance for your race phase.</div>
       <div class="chart-wrap" style="height: 180px;">
         <canvas id="typeChart"></canvas>
       </div>
@@ -487,25 +498,29 @@
       <div class="chart-header">
         <span class="chart-title">Recent Runs</span>
       </div>
-      <table class="runs-table">
-        <thead>
-          <tr>
-            <th>Run</th>
-            <th>Dist</th>
-            <th>Time</th>
-            <th>Pace</th>
-          </tr>
-        </thead>
-        <tbody id="runsBody"></tbody>
-      </table>
+      <div class="chart-annotation">Your latest activities pulled directly from Strava. PR marks your fastest pace of the year.</div>
+      <div style="max-height:360px;overflow-y:auto;">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Dist</th>
+              <th>Time</th>
+              <th>Pace</th>
+            </tr>
+          </thead>
+          <tbody id="runsBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="chart-card">
       <div class="chart-header">
         <span class="chart-title">Pace Per Run</span>
-        <span class="chart-badge">Last 6</span>
+        <span class="chart-badge">This Year</span>
       </div>
-      <div class="chart-wrap" style="height: 260px;">
+      <div class="chart-annotation">A shorter bar means a faster pace. Look for improvement across all your runs this year.</div>
+      <div class="chart-wrap" style="max-height:260px;overflow-y:auto;">
         <canvas id="paceChart"></canvas>
       </div>
     </div>
@@ -517,7 +532,7 @@
   <div class="sheet" id="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title">Connect to Strava</div>
-    <div class="sheet-sub">One-click OAuth — no copy-pasting. Or enter credentials manually below as a fallback.</div>
+    <div class="sheet-sub">One-click OAuth. Or enter credentials manually below.</div>
     <button class="btn-save" id="btnOAuth" style="margin-bottom:16px;">Connect with Strava</button>
     <div style="color:var(--muted);font-size:11px;text-align:center;margin-bottom:12px;letter-spacing:0.5px;">— OR ENTER MANUALLY —</div>
     <input class="sheet-input" id="clientIdInput"     type="text"     placeholder="Client ID (e.g. 209977)"          autocomplete="off" spellcheck="false" />
@@ -643,10 +658,10 @@ function processActivities(activities) {
     typeCounts[cat]++;
   });
 
-  // Recent 6 runs
-  const recent6 = [...runs].sort((a,b) => new Date(b.start_date_local) - new Date(a.start_date_local)).slice(0,6);
+  // All runs sorted newest first
+  const recentRuns = [...runs].sort((a,b) => new Date(b.start_date_local) - new Date(a.start_date_local));
 
-  return { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recent6, paces, runs };
+  return { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recentRuns, paces, runs };
 }
 
 // ── COUNT-UP ANIMATION ────────────────────────────────────────────────────
@@ -661,6 +676,32 @@ function countUp(el, target, decimals, suffix, duration) {
     else el.textContent = decimals ? target.toFixed(decimals) : target;
   }
   requestAnimationFrame(step);
+}
+
+// ── DISTANCE MILESTONE BADGES ─────────────────────────────────────────────
+const BADGE_RANGES = [
+  { label: '1 MI', min: 1.4,  max: 2.4  },
+  { label: '2 MI', min: 2.4,  max: 4.0  },
+  { label: '5K',   min: 4.0,  max: 6.0  },
+  { label: '10K',  min: 8.0,  max: 12.0 },
+  { label: 'HM',   min: 18.0, max: 23.0 },
+  { label: 'FM',   min: 38.0, max: 45.0 },
+];
+
+function computeBadges(runs) {
+  const badgeMap = {};
+  BADGE_RANGES.forEach(({ label, min, max }) => {
+    let bestIdx = -1, bestPace = Infinity;
+    runs.forEach((r, i) => {
+      const km = metersToKm(r.distance);
+      if (km >= min && km < max) {
+        const p = paceSecPerKm(r.distance, r.moving_time);
+        if (p < bestPace) { bestPace = p; bestIdx = i; }
+      }
+    });
+    if (bestIdx >= 0) badgeMap[bestIdx] = label;
+  });
+  return badgeMap;
 }
 
 // ── CHART INSTANCES ───────────────────────────────────────────────────────
@@ -679,7 +720,7 @@ const CHART_DEFAULTS = {
 
 // ── RENDER ────────────────────────────────────────────────────────────────
 function render(data, isLive) {
-  const { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recent6 } = data;
+  const { totalKm, totalRuns, bestPace, longestKm, weekLabels, weekData, typeCounts, recentRuns } = data;
 
   // Stat cards
   countUp(document.getElementById('statDist'), totalKm, 1, '', 1200);
@@ -817,24 +858,28 @@ function render(data, isLive) {
   `).join('');
 
   // ── Pace horizontal bar chart ─────────────────────────────────────
-  const pace6 = recent6.map(r => ({
+  const paceAll = recentRuns.map(r => ({
     label: formatDate(r.start_date_local),
     paceRaw: paceSecPerKm(r.distance, r.moving_time),
     paceFmt: formatPace(paceSecPerKm(r.distance, r.moving_time)),
   }));
 
   // Invert: faster pace = longer bar. Use max - val so bar is longer for lower sec/km
-  const paceRaws  = pace6.map(p => p.paceRaw);
+  const paceRaws  = paceAll.map(p => p.paceRaw);
   const maxPace   = Math.max(...paceRaws) + 30;
-  const barWidths = pace6.map(p => maxPace - p.paceRaw);
+  const barWidths = paceAll.map(p => maxPace - p.paceRaw);
 
-  paceChart = new Chart(document.getElementById('paceChart'), {
+  // Size canvas to fit all runs so the scrollable container can clip it
+  const paceCanvas = document.getElementById('paceChart');
+  paceCanvas.style.height = Math.max(260, recentRuns.length * 28) + 'px';
+
+  paceChart = new Chart(paceCanvas, {
     type: 'bar',
     data: {
-      labels: pace6.map(p => p.label),
+      labels: paceAll.map(p => p.label),
       datasets: [{
         data: barWidths,
-        backgroundColor: pace6.map((p, i) => i === 0 ? YELLOW : `rgba(232,255,71,0.25)`),
+        backgroundColor: paceAll.map((p, i) => i === 0 ? YELLOW : `rgba(232,255,71,0.25)`),
         borderRadius: 3,
         borderSkipped: false,
       }]
@@ -862,7 +907,7 @@ function render(data, isLive) {
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              const item = pace6[ctx.dataIndex];
+              const item = paceAll[ctx.dataIndex];
               return ` ${item.paceFmt} /km`;
             }
           },
@@ -877,22 +922,21 @@ function render(data, isLive) {
   });
 
   // Add pace labels as custom plugin overlay
-  // We'll render them as right-aligned text via a simple afterDraw plugin
-  const paceLabels = pace6.map(p => p.paceFmt + '/km');
+  const paceLabels = paceAll.map(p => p.paceFmt + '/km');
   paceChart.paceLabels = paceLabels;
 
   // ── Recent runs table ─────────────────────────────────────────────
-  const bestPaceVal = Math.min(...recent6.map(r => paceSecPerKm(r.distance, r.moving_time)));
+  const badgeMap = computeBadges(recentRuns);
   const tbody = document.getElementById('runsBody');
-  tbody.innerHTML = recent6.map((r, i) => {
-    const km   = metersToKm(r.distance);
-    const pace = paceSecPerKm(r.distance, r.moving_time);
-    const isPR = pace === bestPaceVal;
+  tbody.innerHTML = recentRuns.map((r, i) => {
+    const km    = metersToKm(r.distance);
+    const pace  = paceSecPerKm(r.distance, r.moving_time);
+    const badge = badgeMap[i] ? `<span class="pr-badge">${badgeMap[i]}</span>` : '';
     return `
       <tr>
         <td>
           <div class="run-date">${formatDate(r.start_date_local)}</div>
-          <div class="run-name">${r.name}${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
+          <div class="run-name">${r.name}${badge}</div>
         </td>
         <td><span style="color:${TEXT};font-family:'DM Mono',monospace">${km.toFixed(2)} km</span></td>
         <td><span style="color:${MUTED}">${formatTime(r.moving_time)}</span></td>
