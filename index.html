@@ -519,7 +519,7 @@
         <span class="chart-title">Pace Per Run</span>
         <span class="chart-badge">This Year</span>
       </div>
-      <div class="chart-annotation">A shorter bar means a faster pace. Look for improvement across all your runs this year.</div>
+      <div class="chart-annotation">A shorter bar means a slower pace. Look for improvement across all your runs this year.</div>
       <div style="height:260px;overflow-y:auto;">
         <div class="chart-wrap" id="paceWrap">
           <canvas id="paceChart"></canvas>
@@ -877,6 +877,22 @@ function render(data, isLive) {
 
   paceChart = new Chart(paceCanvas, {
     type: 'bar',
+    plugins: [{
+      id: 'paceInlineLabels',
+      afterDraw(chart) {
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.font = '10px "DM Mono", monospace';
+        ctx.fillStyle = MUTED;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        meta.data.forEach((bar, i) => {
+          ctx.fillText(paceAll[i].paceFmt + '/km', bar.x + 4, bar.y);
+        });
+        ctx.restore();
+      }
+    }],
     data: {
       labels: paceAll.map(p => p.label),
       datasets: [{
