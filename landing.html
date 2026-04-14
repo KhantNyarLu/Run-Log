@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RunLog — Know Your Training</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0a0a;
+    --surface: #111111;
+    --surface2:#161616;
+    --border:  #1e1e1e;
+    --accent:  #e8ff47;
+    --accent2: #ff6b35;
+    --text:    #f0ece4;
+    --muted:   #555555;
+    --muted2:  #222222;
+    --black:   #040404;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    overflow-x: hidden;
+  }
+
+  /* grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* ── NAV ─────────────────────────────────────────────────────────── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.2rem 3rem;
+    transition: background 0.35s, border-color 0.35s, backdrop-filter 0.35s;
+    border-bottom: 1px solid transparent;
+  }
+
+  nav.scrolled {
+    background: rgba(10,10,10,0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-color: var(--border);
+  }
+
+  .nav-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .nav-logo span { color: #2a2a2a; }
+
+  .nav-right { display: flex; align-items: center; gap: 2rem; }
+
+  .nav-links { display: flex; gap: 1.8rem; }
+
+  .nav-links a {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  .nav-cta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--black);
+    background: var(--accent);
+    padding: 0.55rem 1.2rem;
+    text-decoration: none;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .nav-cta:hover { opacity: 0.85; }
+
+  /* ── HERO ────────────────────────────────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* accent rule left edge */
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 50%;
+    background: var(--accent);
+    pointer-events: none;
+  }
+
+  .hero-left {
+    padding: 8rem 3rem 5rem;
+    display: flex;
+    flex-direction: column;
+    animation: fadeUp 0.6s ease both;
+    position: relative;
+    z-index: 2;
+  }
+
+  .hero-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+  .hero-tag::before {
+    content: '';
+    width: 20px;
+    height: 1.5px;
+    background: var(--accent2);
+    flex-shrink: 0;
+  }
+
+  .hero-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(4.5rem, 9vw, 8rem);
+    line-height: 0.88;
+    letter-spacing: 0.01em;
+    margin-bottom: 2rem;
+  }
+  .hero-title em { color: var(--accent); font-style: normal; }
+
+  .hero-sub {
+    font-size: 0.95rem;
+    color: var(--muted);
+    max-width: 440px;
+    line-height: 1.85;
+    margin-bottom: 2.5rem;
+  }
+  .hero-sub strong { color: var(--text); font-weight: 400; }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 3.5rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--black);
+    background: var(--accent);
+    padding: 0.9rem 2rem;
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.2s, transform 0.15s;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { opacity: 0.88; transform: translateY(-2px); }
+
+  .btn-ghost {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.9rem 1.2rem;
+    border: 1px solid var(--border);
+    text-decoration: none;
+    transition: color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .hero-stats {
+    display: flex;
+    gap: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .hero-stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .hero-stat-lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+
+  /* hero right — dashboard screenshot */
+  .hero-right {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+    animation: fadeIn 0.9s 0.2s ease both;
+  }
+
+  /* fade from left so image blends into text panel */
+  .hero-right::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 160px;
+    background: linear-gradient(to right, var(--bg), transparent);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* fade top and bottom */
+  .hero-right::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to bottom,
+        var(--bg) 0%,
+        transparent 12%,
+        transparent 88%,
+        var(--bg) 100%);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .dashboard-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: left center;
+    filter: brightness(0.88);
+    display: block;
+  }
+
+  /* ── SHARED SECTION STYLES ───────────────────────────────────────── */
+  section {
+    padding: 6rem 3rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .section-tag::before {
+    content: '';
+    width: 16px;
+    height: 1.5px;
+    background: var(--accent2);
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    letter-spacing: 0.02em;
+    line-height: 0.92;
+    margin-bottom: 3rem;
+  }
+  .section-title em { color: var(--accent); font-style: normal; }
+
+  /* ── PROBLEM ─────────────────────────────────────────────────────── */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5rem;
+    align-items: center;
+  }
+
+  .problem-body {
+    font-size: 0.9rem;
+    line-height: 1.85;
+    color: var(--muted);
+  }
+  .problem-body strong { color: var(--text); font-weight: 400; }
+
+  .problem-quote {
+    background: var(--surface);
+    border-left: 2px solid var(--accent);
+    padding: 1.6rem 1.8rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .problem-quote cite {
+    display: block;
+    font-size: 0.58rem;
+    color: var(--muted);
+    margin-top: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-style: normal;
+  }
+
+  /* ── FEATURES ────────────────────────────────────────────────────── */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .feature-card {
+    background: var(--surface);
+    padding: 2rem 1.6rem;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.2s;
+  }
+  .feature-card:hover { background: var(--surface2); }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+  .feature-card:hover::before { transform: scaleX(1); }
+
+  .feature-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: rgba(255,255,255,0.04);
+    position: absolute;
+    top: 0.8rem;
+    right: 1rem;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .feature-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+    margin-top: 0.3rem;
+  }
+
+  .feature-body { font-size: 0.78rem; line-height: 1.7; color: var(--muted); }
+
+  .mini-chart {
+    margin-top: 1.2rem;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 36px;
+  }
+  .mini-bar { flex: 1; background: rgba(232,255,71,0.14); border-radius: 1px; }
+  .mini-bar.hi { background: var(--accent); }
+
+  /* ── HOW IT WORKS ────────────────────────────────────────────────── */
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .how-card {
+    background: var(--surface);
+    padding: 2.5rem 2rem;
+    position: relative;
+  }
+
+  .how-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4.5rem;
+    line-height: 1;
+    color: rgba(232,255,71,0.05);
+    position: absolute;
+    top: 1rem;
+    right: 1.2rem;
+    pointer-events: none;
+  }
+
+  .how-step-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 0.8rem;
+  }
+
+  .how-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    margin-bottom: 0.8rem;
+    line-height: 1;
+  }
+
+  .how-body { font-size: 0.8rem; line-height: 1.75; color: var(--muted); }
+  .how-body strong { color: var(--text); font-weight: 400; }
+
+  /* ── CTA ─────────────────────────────────────────────────────────── */
+  .cta-section {
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-section::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(232,255,71,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .cta-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+  }
+
+  .cta-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem, 8vw, 7rem);
+    letter-spacing: 0.02em;
+    line-height: 0.9;
+    margin-bottom: 1.5rem;
+  }
+  .cta-title em { color: var(--accent); font-style: normal; }
+
+  .cta-sub {
+    font-size: 0.88rem;
+    color: var(--muted);
+    margin-bottom: 2.5rem;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.7;
+  }
+
+  /* ── FOOTER ──────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+  }
+  .footer-logo span { color: #2a2a2a; }
+
+  .footer-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.56rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  /* ── SCROLL REVEAL ───────────────────────────────────────────────── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.65s ease, transform 0.65s ease;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ── ANIMATIONS ──────────────────────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .features-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (max-width: 900px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+
+    .hero {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+    .hero::after { display: none; }
+
+    .hero-left { padding: 6rem 1.5rem 2.5rem; }
+
+    .hero-right {
+      height: 60vw;
+      min-height: 260px;
+    }
+    /* on mobile fade from top so it blends beneath the text */
+    .hero-right::before {
+      width: 100%;
+      height: 80px;
+      background: linear-gradient(to bottom, var(--bg), transparent);
+    }
+
+    section { padding: 4rem 1.5rem; }
+
+    .problem-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+
+    .how-grid { grid-template-columns: 1fr; }
+
+    footer {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 1.5rem;
+    }
+    .footer-meta { text-align: left; }
+  }
+
+  @media (max-width: 600px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .hero-stats { gap: 1.5rem; }
+    .hero-actions { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <a href="#" class="nav-logo">Run<span>/</span>Log</a>
+  <div class="nav-right">
+    <div class="nav-links">
+      <a href="#problem">Problem</a>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+    </div>
+    <a href="index.html" class="nav-cta">Open Dashboard</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-left">
+    <div class="hero-tag">Strava-powered · Auto-refresh · Race-ready</div>
+    <h1 class="hero-title">Know<br>Your<br><em>Training.</em></h1>
+    <p class="hero-sub">
+      Strava has your data. It is just buried under kudos and
+      leaderboards. RunLog pulls it out and shows you what actually
+      matters for training: <strong>weekly mileage, pace, run type
+      balance, personal records.</strong> Nothing else.
+    </p>
+    <div class="hero-actions">
+      <a href="index.html" class="btn-primary">Connect Strava →</a>
+      <a href="#how" class="btn-ghost">How it works</a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <div class="hero-stat-val">Auto</div>
+        <div class="hero-stat-lbl">Refreshes every load</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">4</div>
+        <div class="hero-stat-lbl">Chart types</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">0</div>
+        <div class="hero-stat-lbl">Manual exports</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">1</div>
+        <div class="hero-stat-lbl">Click to connect</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <img src="Screen.png" alt="RunLog dashboard" class="dashboard-img" />
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section id="problem" class="reveal">
+  <div class="problem-grid">
+    <div>
+      <div class="section-tag">The Problem</div>
+      <h2 class="section-title">Strava Buries<br>Your <em>Data.</em></h2>
+      <p class="problem-body">
+        You log every run. But getting to the actual numbers means
+        scrolling past social stuff that has nothing to do with your
+        training. Kudos, segment leaderboards, friend activity.
+        <strong>None of it tells you whether you are ready for your race.</strong>
+        <br><br>
+        RunLog skips all of that. Connect your Strava account once
+        and your data is just there every time you open it, pulled
+        fresh from the API on every page load.
+      </p>
+    </div>
+    <div class="problem-quote">
+      "Am I running more than last week?
+      Is my pace improving? Is my training
+      mix right for this phase? These questions
+      should not take 30 seconds to answer."
+      <cite>The runner RunLog is built for</cite>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" class="reveal">
+  <div class="section-tag">What you get</div>
+  <h2 class="section-title">Four Charts.<br><em>Every Answer.</em></h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-num">01</div>
+      <div class="feature-title">Weekly Mileage</div>
+      <div class="feature-body">Track whether your total running volume is increasing week over week. The most important question in any training plan.</div>
+      <div class="mini-chart">
+        <div class="mini-bar" style="height:42%"></div>
+        <div class="mini-bar" style="height:56%"></div>
+        <div class="mini-bar" style="height:48%"></div>
+        <div class="mini-bar" style="height:68%"></div>
+        <div class="mini-bar" style="height:60%"></div>
+        <div class="mini-bar" style="height:78%"></div>
+        <div class="mini-bar hi" style="height:55%"></div>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">02</div>
+      <div class="feature-title">Run Type Split</div>
+      <div class="feature-body">See if your balance of easy, tempo, long, and interval runs matches your current race prep phase.</div>
+      <div class="mini-chart" style="align-items:center;justify-content:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:conic-gradient(var(--accent) 0% 45%,var(--accent2) 45% 68%,rgba(232,255,71,0.3) 68% 84%,rgba(255,107,53,0.3) 84% 100%);position:relative;">
+          <div style="position:absolute;inset:30%;border-radius:50%;background:var(--surface);"></div>
+        </div>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">03</div>
+      <div class="feature-title">Pace Per Run</div>
+      <div class="feature-body">Compare pace across all your runs this year. A shorter bar means a faster pace. Watch your improvement build over time.</div>
+      <div class="mini-chart" style="flex-direction:column;height:auto;gap:5px;margin-top:1rem;">
+        <div style="height:6px;width:90%;background:var(--accent);border-radius:1px;"></div>
+        <div style="height:6px;width:62%;background:rgba(232,255,71,0.25);border-radius:1px;"></div>
+        <div style="height:6px;width:75%;background:rgba(232,255,71,0.25);border-radius:1px;"></div>
+        <div style="height:6px;width:55%;background:rgba(232,255,71,0.25);border-radius:1px;"></div>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-num">04</div>
+      <div class="feature-title">Distance Badges</div>
+      <div class="feature-body">Your fastest 5K, 10K, and half marathon pace highlighted automatically. See your personal bests without hunting for them.</div>
+      <div style="margin-top:1.2rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
+        <span style="font-family:'DM Mono',monospace;font-size:0.58rem;background:var(--accent2);color:#fff;padding:0.18rem 0.5rem;letter-spacing:0.06em;">5K</span>
+        <span style="font-family:'DM Mono',monospace;font-size:0.58rem;background:var(--accent2);color:#fff;padding:0.18rem 0.5rem;letter-spacing:0.06em;">10K</span>
+        <span style="font-family:'DM Mono',monospace;font-size:0.58rem;background:var(--muted2);color:var(--muted);padding:0.18rem 0.5rem;letter-spacing:0.06em;">HM</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="reveal">
+  <div class="section-tag">Process</div>
+  <h2 class="section-title">Three Steps.<br><em>Zero Friction.</em></h2>
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="how-num">01</div>
+      <div class="how-step-tag">Step one</div>
+      <div class="how-title">Connect<br>Strava</div>
+      <p class="how-body">Click "Connect with Strava" and authorize access to your activities. <strong>One click, no terminal, no copy-pasting tokens.</strong> The OAuth flow handles everything automatically.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">02</div>
+      <div class="how-step-tag">Step two</div>
+      <div class="how-title">Go For<br>a Run</div>
+      <p class="how-body">Run as normal. Strava records everything via your phone or Apple Watch and <strong>syncs automatically</strong> when you finish.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">03</div>
+      <div class="how-step-tag">Step three</div>
+      <div class="how-title">Check<br>Your Data</div>
+      <p class="how-body">Open RunLog on your phone or desktop. <strong>Your latest run is already there.</strong> No refresh, no export, no manual entry.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section reveal">
+  <div class="cta-label">Ready to train smarter?</div>
+  <h2 class="cta-title">Stop<br>Scrolling.<br><em>Start Running.</em></h2>
+  <p class="cta-sub">Connect your Strava account in one click and see your training data the way it should look.</p>
+  <a href="index.html" class="btn-primary">Connect Strava and Start →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Run<span>/</span>Log</div>
+  <div class="footer-meta">
+    VDES39915 · Project 3 · Winter 2026<br>
+    Powered by Strava API · Chart.js · Vercel
+  </div>
+</footer>
+
+<script>
+  // Nav blur on scroll
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
+
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target); // fire once
+      }
+    });
+  }, { threshold: 0.08 });
+  reveals.forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
